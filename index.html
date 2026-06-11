@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>தாஸ் PDF எடிட்டர் - பிரிண்ட் பிக்ஸட் v5.5</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <style>
+        /* ஸ்கிரீன் டிஸ்ப்ளே செட்டிங்ஸ் */
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100vh;
+            background-color: #eef2f7;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            user-select: none;
+        }
+
+        /* Sejda Premium Toolbar */
+        .editor-header {
+            background-color: #002060;
+            color: white;
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.15);
+            flex-wrap: wrap;
+            z-index: 100;
+        }
+
+        .brand {
+            font-weight: bold;
+            font-size: 16px;
+            color: #2ecc71;
+            border-right: 2px solid #34495e;
+            padding-right: 15px;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255,255,255,0.1);
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+
+        .control-group label {
+            font-size: 12px;
+            font-weight: bold;
+            color: #ddd;
+        }
+
+        .btn {
+            background-color: #34495e;
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 13px;
+            transition: 0.2s;
+        }
+
+        .btn:hover { background-color: #4f6f8f; }
+        .btn-action { background-color: #007bff; }
+        .btn-action:hover { background-color: #0056b3; }
+        .btn-whiteout { background-color: #9b59b6; }
+        .btn-whiteout:hover { background-color: #8e44ad; }
+        .btn-move { background-color: #f39c12; }
+        .btn-move:hover { background-color: #d35400; }
+        .btn-active-mode { background-color: #2ecc71 !important; box-shadow: 0 0 8px #2ecc71; }
+        .btn-danger { background-color: #dc3545; }
+        .btn-danger:hover { background-color: #c82333; }
+        .btn-save { background-color: #28a745; margin-left: auto; }
+        .btn-save:hover { background-color: #218838; }
+
+        select, input[type="number"] {
+            padding: 4px;
+            border-radius: 4px;
+            border: none;
+            outline: none;
+        }
+
+        .workspace {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            overflow: auto;
+            padding: 20px;
+        }
+
+        .pdf-wrapper {
+            position: relative;
+            background: white;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            border-radius: 4px;
+        }
+
+        canvas {
+            display: block;
+            border-radius: 4px;
+            z-index: 1;
+        }
+
+        .interaction-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+        }
+
+        /* எடிட்டிங் டெக்ஸ்ட் பாக்ஸ் */
+        .sejda-input-node {
+            position: absolute;
+            background: white !important;
+            border: 1px dashed #3498db;
+            color: #333 !important;
+            outline: none;
+            padding: 2px 6px;
+            min-width: 20px; 
+            display: inline-block !important;
+            white-space: nowrap !important;
+            z-index: 20;
+            user-select: text;
+            visibility: visible !important;
+            opacity: 1 !important;
+            direction: ltr !important;
+            text-align: left !important;
+        }
+
+        /* ஒயிட் அவுட் பாக்ஸ் */
+        .sejda-whiteout-node {
+            position: absolute;
+            background: white !important;
+            border: 1px dashed #9b59b6;
+            width: 80px;
+            height: 25px;
+            z-index: 15;
+        }
+
+        .selected-node {
+            border: 1px dashed #ff9800 !important;
+            box-shadow: 0 0 5px rgba(255, 152, 0, 0.5);
+        }
+
+        .sejda-image-node {
+            position: absolute;
+            border: 1px dashed #e67e22;
+            z-index: 25;
+            display: inline-block;
+        }
+
+        .sejda-image-node img {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .resize-handle {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: #ff9800;
+            bottom: 0;
+            right: 0;
+            cursor: se-resize;
+            z-index: 30;
+        }
+
+        /* ========================================================== */
+        /* முக்கிய பகுதி: 100% கச்சிதமான A4 பிரிண்ட் செட்டிங்ஸ்          */
+        /* ========================================================== */
+        @page {
+            size: A4 portrait;
+            margin: 0 !important; /* பிரவுசரின் ஹெடர், டைம், லிங்க் அனைத்தையும் நீக்க */
+        }
+
+        @media print {
+            html, body {
+                background: white !important;
+                width: 210mm !important; /* A4 துல்லியமான அகலம் */
+                height: 297mm !important; /* A4 துல்லியமான உயரம் */
+                overflow: hidden !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            
+            /* டூல்பாரை முழுமையாக மறைக்க */
+            .editor-header { 
+                display: none !important; 
+            }
+            
+            /* வொர்க்ஸ்பேஸ் மார்ஜின்களை நீக்கி, பிரிண்ட் பக்கத்தின் டாப் கார்னருக்கு கொண்டு செல்ல */
+            .workspace { 
+                padding: 0 !important; 
+                margin: 0 !important; 
+                overflow: visible !important;
+                display: block !important;
+            }
+            
+            /* PDF பாக்ஸ் பேப்பரின் முழு அளவை எடுக்க */
+            .pdf-wrapper { 
+                box-shadow: none !important; 
+                border: none !important; 
+                width: 100% !important;
+                height: 100% !important;
+                position: absolute !important;
+                top: 0 !important;
+                left: 0 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                page-break-inside: avoid !important;
+            }
+            
+            canvas { 
+                width: 100% !important;
+                height: 100% !important;
+                display: block !important; 
+            }
+            
+            .interaction-layer { 
+                display: block !important; 
+                z-index: 10 !important; 
+            }
+            
+            /* திருத்திய எழுத்துக்கள் பிரிண்டில் துல்லியமாகத் தெரிய */
+            .sejda-input-node { 
+                border: none !important; 
+                background: white !important; 
+                color: #333 !important; 
+                position: absolute !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            
+            .sejda-whiteout-node { 
+                border: none !important; 
+                background: white !important; 
+                position: absolute !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            
+            .sejda-image-node { 
+                border: none !important; 
+                position: absolute !important;
+            }
+            
+            .resize-handle, .selected-node { 
+                display: none !important; 
+                border: none !important; 
+                background: transparent !important; 
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="editor-header">
+        <div class="brand">DHASS PDF v5.5</div>
+        <input type="file" id="pdf-uploader" accept=".pdf" style="display: none;">
+        <button class="btn" onclick="document.getElementById('pdf-uploader').click()">📂 PDF திறக்க</button>
+        
+        <button class="btn btn-action" id="btn-add-text">📝 எழுத (Text)</button>
+        <button class="btn btn-whiteout" id="btn-add-whiteout">⬜ ஒயிட் அவுட் (Patch)</button>
+        <button class="btn btn-move" id="btn-toggle-move">🎯 நகர்த்த (Move: OFF)</button>
+
+        <input type="file" id="image-uploader" accept="image/*" style="display: none;">
+        <button class="btn" onclick="document.getElementById('image-uploader').click()">🖼️ படம் சேர்க்க</button>
+
+        <div class="control-group">
+            <label>அளவு:</label>
+            <input type="number" id="global-font-size" value="18" min="8" max="72" style="width: 45px;">
+        </div>
+
+        <div class="control-group">
+            <label> can பாண்ட்:</label>
+            <select id="global-font-family">
+                <option value="'Segoe UI', sans-serif">Segoe UI</option>
+                <option value="'Arial', sans-serif">Arial</option>
+                <option value="'Times New Roman', serif">Times New Roman</option>
+                <option value="'Latha', 'Tamil', sans-serif">லதா (Tamil)</option>
+                <option value="'Bamini', sans-serif">பாமினி</option>
+            </select>
+        </div>
+
+        <button class="btn" id="btn-bold"><b>B</b></button>
+        <button class="btn btn-danger" id="btn-delete">🗑️ நீக்க (Delete)</button>
+
+        <button class="btn btn-save" onclick="triggerPrint()">💾 PDF-ஆகச் சேமி / பிரிண்ட்</button>
+    </div>
+
+    <div class="workspace">
+        <div class="pdf-wrapper" id="pdfWrapper" style="display: none;">
+            <canvas id="pdfCanvas"></canvas>
+            <div class="interaction-layer" id="interactionLayer"></div>
+        </div>
+    </div>
+
+<script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
+    const uploader = document.getElementById('pdf-uploader');
+    const imgUploader = document.getElementById('image-uploader');
+    const canvas = document.getElementById('pdfCanvas');
+    const ctx = canvas.getContext('2d');
+    const interactionLayer = document.getElementById('interactionLayer');
+    const pdfWrapper = document.getElementById('pdfWrapper');
+    
+    let selectedElement = null;
+    let isMoveMode = false;
+
+    // PDF ஓப்பன் லாஜிக்
+    uploader.addEventListener('change', function(e) {
+        let file = e.target.files[0];
+        if (!file) return;
+        let reader = new FileReader();
+        reader.onload = function() {
+            let typedarray = new Uint8Array(this.result);
+            pdfjsLib.getDocument(typedarray).promise.then(function(pdf) {
+                pdf.getPage(1).then(function(page) {
+                    let viewport = page.getViewport({ scale: 1.5 });
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+                    pdfWrapper.style.width = viewport.width + 'px';
+                    pdfWrapper.style.height = viewport.height + 'px';
+                    pdfWrapper.style.display = 'block';
+                    page.render({ canvasContext: ctx, viewport: viewport });
+                });
+            });
+        };
+        reader.readAsArrayBuffer(file);
+    });
+
+    // எழுத பட்டன்
+    document.getElementById('btn-add-text').addEventListener('click', function() {
+        if(pdfWrapper.style.display === 'none') return alert("முதலில் PDF திறக்கவும்!");
+
+        const inputNode = document.createElement('div');
+        inputNode.className = 'sejda-input-node';
+        inputNode.contentEditable = true;
+        inputNode.innerText = 'அ';
+        
+        inputNode.style.left = '150px';
+        inputNode.style.top = '150px';
+        inputNode.style.fontSize = document.getElementById('global-font-size').value + 'px';
+        inputNode.style.fontFamily = document.getElementById('global-font-family').value;
+
+        inputNode.addEventListener('mousedown', function() { selectElement(inputNode); });
+        
+        makeNodeDraggableAndResizable(inputNode, null);
+        interactionLayer.appendChild(inputNode);
+        inputNode.focus();
+        selectElement(inputNode);
+    });
+
+    // ஒயிட் அவுட் பட்டன்
+    document.getElementById('btn-add-whiteout').addEventListener('click', function() {
+        if(pdfWrapper.style.display === 'none') return alert("முதலில் PDF திறக்கவும்!");
+
+        const whiteoutNode = document.createElement('div');
+        whiteoutNode.className = 'sejda-whiteout-node';
+        whiteoutNode.style.left = '150px';
+        whiteoutNode.style.top = '180px';
+
+        const resizer = document.createElement('div');
+        resizer.className = 'resize-handle';
+        whiteoutNode.appendChild(resizer);
+
+        whiteoutNode.addEventListener('mousedown', function() { selectElement(whiteoutNode); });
+
+        makeNodeDraggableAndResizable(whiteoutNode, resizer);
+        interactionLayer.appendChild(whiteoutNode);
+        selectElement(whiteoutNode);
+    });
+
+    // நகர்த்தும் பட்டன் (Toggle)
+    const moveBtn = document.getElementById('btn-toggle-move');
+    moveBtn.addEventListener('click', function() {
+        isMoveMode = !isMoveMode;
+        if(isMoveMode) {
+            moveBtn.innerText = "🎯 நகர்த்த (Move: ON)";
+            moveBtn.classList.add('btn-active-mode');
+            interactionLayer.style.cursor = 'move';
+        } else {
+            moveBtn.innerText = "🎯 நகர்த்த (Move: OFF)";
+            moveBtn.classList.remove('btn-active-mode');
+            interactionLayer.style.cursor = 'default';
+        }
+    });
+
+    // இமேஜ் அப்லோடு லாஜிக்
+    imgUploader.addEventListener('change', function(e) {
+        let file = e.target.files[0];
+        if (!file) return;
+        let reader = new FileReader();
+        reader.onload = function(event) {
+            const imgNode = document.createElement('div');
+            imgNode.className = 'sejda-image-node';
+            imgNode.style.left = '100px'; imgNode.style.top = '100px';
+            imgNode.style.width = '120px'; imgNode.style.height = '120px';
+
+            const img = document.createElement('img');
+            img.src = event.target.result;
+            imgNode.appendChild(img);
+
+            const resizer = document.createElement('div');
+            resizer.className = 'resize-handle';
+            imgNode.appendChild(resizer);
+
+            imgNode.addEventListener('mousedown', function() { selectElement(imgNode); });
+            makeNodeDraggableAndResizable(imgNode, resizer);
+            interactionLayer.appendChild(imgNode);
+            selectElement(imgNode);
+        };
+        reader.readAsDataURL(file);
+    });
+
+    function selectElement(el) {
+        if(selectedElement) selectedElement.classList.remove('selected-node');
+        selectedElement = el;
+        selectedElement.classList.add('selected-node');
+
+        if(el.classList.contains('sejda-input-node')) {
+            document.getElementById('global-font-size').value = parseInt(el.style.fontSize) || 18;
+            document.getElementById('global-font-family').value = el.style.fontFamily;
+        }
+    }
+
+    // டூல்பார் கன்ட்ரோல்கள்
+    document.getElementById('global-font-size').addEventListener('input', function() {
+        if(selectedElement && selectedElement.classList.contains('sejda-input-node')) {
+            selectedElement.style.fontSize = this.value + 'px';
+        }
+    });
+
+    document.getElementById('global-font-family').addEventListener('change', function() {
+        if(selectedElement && selectedElement.classList.contains('sejda-input-node')) {
+            selectedElement.style.fontFamily = this.value;
+        }
+    });
+
+    document.getElementById('btn-bold').addEventListener('click', function() {
+        if(selectedElement && selectedElement.classList.contains('sejda-input-node')) {
+            selectedElement.style.fontWeight = selectedElement.style.fontWeight === 'bold' ? 'normal' : 'bold';
+        }
+    });
+
+    document.getElementById('btn-delete').addEventListener('click', function() {
+        if(selectedElement) { selectedElement.remove(); selectedElement = null; }
+    });
+
+    // டிராக் மற்றும் ரீசைஸ் லாஜிக்
+    function makeNodeDraggableAndResizable(elmnt, resizer) {
+        let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+        
+        elmnt.onmousedown = function(e) {
+            if (e.target === resizer) return;
+            if (!isMoveMode) return; 
+
+            e = e || window.event;
+            pos3 = e.clientX; pos4 = e.clientY;
+            document.onmouseup = closeDragElement;
+            document.onmousemove = elementDrag;
+        };
+
+        function elementDrag(e) {
+            e = e || window.event;
+            pos1 = pos3 - e.clientX; pos2 = pos4 - e.clientY;
+            pos3 = e.clientX; pos4 = e.clientY;
+            elmnt.style.top = (elmnt.offsetTop - pos2) + "px";
+            elmnt.style.left = (elmnt.offsetLeft - pos1) + "px";
+        }
+
+        function closeDragElement() {
+            document.onmouseup = null; document.onmousemove = null;
+        }
+
+        if (resizer) {
+            resizer.onmousedown = function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                window.addEventListener('mousemove', elementResize);
+                window.addEventListener('mouseup', closeResize);
+            };
+
+            function elementResize(e) {
+                const rect = elmnt.getBoundingClientRect();
+                elmnt.style.width = (e.clientX - rect.left) + 'px';
+                elmnt.style.height = (e.clientY - rect.top) + 'px';
+            }
+
+            function closeResize() {
+                window.removeEventListener('mousemove', elementResize);
+                window.removeEventListener('mouseup', closeResize);
+            }
+        }
+    }
+
+    interactionLayer.addEventListener('mousedown', function(e) {
+        if(e.target === interactionLayer && selectedElement) {
+            selectedElement.classList.remove('selected-node');
+            selectedElement = null;
+        }
+    });
+
+    function triggerPrint() {
+        if(selectedElement) { selectedElement.classList.remove('selected-node'); selectedElement = null; }
+        setTimeout(() => { window.print(); }, 300);
+    }
+</script>
+
+</body>
+</html>
